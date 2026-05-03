@@ -133,7 +133,18 @@ class MusicService : Service(), SensorEventListener {
         val totalSongs = if (phoneSongs.isNotEmpty()) phoneSongs.size else songs.size
         if (totalSongs == 0) return
 
-        currentIndex = index.coerceIn(0, totalSongs - 1)
+        val requestedIndex = index.coerceIn(0, totalSongs - 1)
+
+        if (player != null && currentIndex == requestedIndex) {
+            player?.start()
+            isPlaying = true
+            sendState("PLAY")
+            startProgressUpdates()
+            startForeground(NOTIFICATION_ID, buildNotification("Playing"))
+            return
+        }
+
+        currentIndex = requestedIndex
 
         if (player != null) {
             player!!.release()
