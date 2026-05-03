@@ -11,7 +11,9 @@ import android.hardware.SensorManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,14 @@ class MusicService : Service(), SensorEventListener {
     private var isPlaying = false
     private var sensorManager: SensorManager? = null
     private var lastShakeTime = 0L
+    private val progressHandler = Handler(Looper.getMainLooper())
+
+    private val progressRunnable = object : Runnable {
+        override fun run() {
+            sendState(if (isPlaying) "PLAY" else "PAUSE")
+            progressHandler.postDelayed(this, 500)
+        }
+    }
 
     private val shakeThreshold = 12f
     private val shakeDebounceMs = 1000L
@@ -39,6 +49,7 @@ class MusicService : Service(), SensorEventListener {
         const val ACTION_PAUSE = "PAUSE"
         const val ACTION_NEXT = "NEXT"
         const val ACTION_PREVIOUS = "PREVIOUS"
+        const val ACTION_SEEK = "SEEK"
 
         private const val CHANNEL_ID = "music_channel"
         private const val NOTIFICATION_ID = 1
@@ -112,6 +123,7 @@ class MusicService : Service(), SensorEventListener {
             ACTION_PAUSE -> pauseMusic()
             ACTION_NEXT -> nextMusic()
             ACTION_PREVIOUS -> previousMusic()
+            ACTION_SEEK -> seekTo(intent.getIntExtra("position", 0))
         }
 
         return START_STICKY
@@ -143,6 +155,7 @@ class MusicService : Service(), SensorEventListener {
         isPlaying = true
 
         sendState("PLAY")
+        startProgressUpdates()
 
         startForeground(NOTIFICATION_ID, buildNotification("Playing"))
     }
@@ -151,8 +164,17 @@ class MusicService : Service(), SensorEventListener {
         player?.pause()
         isPlaying = false
         sendState("PAUSE")
+        stopProgressUpdates()
 
         startForeground(NOTIFICATION_ID, buildNotification("Paused"))
+    }
+
+    private fun seekTo(position: Int) {
+        player?.let {
+            val target = position.coerceIn(0, it.duration)
+            it.seekTo(target)
+        }
+        sendState(if (isPlaying) "PLAY" else "PAUSE")
     }
 
     private fun nextMusic() {
@@ -171,6 +193,8 @@ class MusicService : Service(), SensorEventListener {
         val intent = Intent("music_state")
         intent.putExtra("state", state)
         intent.putExtra("index", currentIndex)
+        intent.putExtra("position", player?.currentPosition ?: 0)
+        intent.putExtra("duration", player?.duration ?: 0)
         sendBroadcast(intent)
     }
 
@@ -271,10 +295,38 @@ class MusicService : Service(), SensorEventListener {
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        cleanupPlayerAndSensors()
+        stopForeground(true)
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        cleanupPlayerAndSensors()
+        stopForeground(true)
+        stopSelf()
+        super.onDestroy()
+    }
+
+    private fun startProgressUpdates() {
+        progressHandler.removeCallbacks(progressRunnable)
+        progressHandler.post(progressRunnable)
+    }
+
+    private fun stopProgressUpdates() {
+        progressHandler.removeCallbacks(progressRunnable)
+    }
+
+    private fun cleanupPlayerAndSensors() {
+        stopProgressUpdates()
         sensorManager?.unregisterListener(this)
+        try {
+            player?.stop()
+        } catch (_: IllegalStateException) {
+        }
         player?.release()
         player = null
-        super.onDestroy()
+        isPlaying = false
     }
 }

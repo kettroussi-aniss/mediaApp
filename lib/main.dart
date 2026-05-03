@@ -63,6 +63,9 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   ];
 
   int currentIndex = 0;
+  int currentPosition = 0;
+  int duration = 0;
+  bool isSeeking = false;
 
   @override
   void initState() {
@@ -72,11 +75,18 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     loadFavorites();
     loadDeviceSongs();
 
-    AudioService.initListener((state, index) {
+    AudioService.initListener((state, index, position, totalDuration) {
+      if (!mounted) return;
+
       setState(() {
         if (index != null && index >= 0 && index < songs.length) {
           currentIndex = index;
         }
+
+        if (!isSeeking) {
+          currentPosition = position;
+        }
+        duration = totalDuration;
 
         if (state == "PLAY") {
           isPlaying = true;
@@ -177,6 +187,16 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     });
   }
 
+  void seekTo(double value) async {
+    final position = value.toInt();
+    setState(() {
+      currentPosition = position;
+      isSeeking = false;
+    });
+
+    await AudioService.seekTo(position);
+  }
+
   List<String> getFavoriteSongs() {
     List<String> fav = [];
     for (int i = 0; i < songs.length; i++) {
@@ -236,6 +256,25 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                 ),
                 const SizedBox(height: 20),
                 if (visibleAfterFirstPlay)
+                  Slider(
+                    value: currentPosition
+                        .clamp(0, duration > 0 ? duration : 1)
+                        .toDouble(),
+                    min: 0,
+                    max: duration > 0 ? duration.toDouble() : 1,
+                    onChangeStart: (_) {
+                      setState(() {
+                        isSeeking = true;
+                      });
+                    },
+                    onChanged: (value) {
+                      setState(() {
+                        currentPosition = value.toInt();
+                      });
+                    },
+                    onChangeEnd: seekTo,
+                  ),
+                if (visibleAfterFirstPlay)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -268,11 +307,15 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
                           },
                         ),
                       ),
-                      Text(
-                        songs[currentIndex],
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          songs[currentIndex],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],

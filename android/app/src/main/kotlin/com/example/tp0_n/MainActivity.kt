@@ -73,6 +73,17 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "seekTo" -> {
+                        val position = call.argument<Int>("position") ?: 0
+
+                        val intent = Intent(this, MusicService::class.java)
+                        intent.action = MusicService.ACTION_SEEK
+                        intent.putExtra("position", position)
+
+                        startMusicService(intent)
+                        result.success(null)
+                    }
+
                     else -> result.notImplemented()
                 }
             }
@@ -86,7 +97,9 @@ class MainActivity : FlutterActivity() {
                         override fun onReceive(context: Context?, intent: Intent?) {
                             val data = mapOf(
                                 "state" to (intent?.getStringExtra("state") ?: ""),
-                                "index" to (intent?.getIntExtra("index", 0) ?: 0)
+                                "index" to (intent?.getIntExtra("index", 0) ?: 0),
+                                "position" to (intent?.getIntExtra("position", 0) ?: 0),
+                                "duration" to (intent?.getIntExtra("duration", 0) ?: 0)
                             )
                             events?.success(data)
                         }

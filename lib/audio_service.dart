@@ -26,14 +26,28 @@ class AudioService {
     return songs?.map((song) => song.toString()).toList() ?? [];
   }
 
-  static void initListener(Function(String state, int? index) onStateChanged) {
+  static Future<void> seekTo(int position) async {
+    await platform.invokeMethod('seekTo', {
+      "position": position,
+    });
+  }
+
+  static void initListener(
+    Function(String state, int? index, int position, int duration)
+        onStateChanged,
+  ) {
     const EventChannel channel = EventChannel('music_state');
 
     channel.receiveBroadcastStream().listen((event) {
       if (event is Map) {
-        onStateChanged(event['state'].toString(), event['index'] as int?);
+        onStateChanged(
+          event['state'].toString(),
+          event['index'] as int?,
+          event['position'] as int? ?? 0,
+          event['duration'] as int? ?? 0,
+        );
       } else {
-        onStateChanged(event.toString(), null);
+        onStateChanged(event.toString(), null, 0, 0);
       }
     });
   }
