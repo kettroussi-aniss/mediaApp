@@ -19,7 +19,11 @@ void main() async {
 }
 
 Future<void> requestNotificationPermission() async {
-  await Permission.notification.request();
+  await [
+    Permission.notification,
+    Permission.audio,
+    Permission.storage,
+  ].request();
 }
 
 class MyApp extends StatelessWidget {
@@ -48,13 +52,12 @@ class MusicPlayerScreen extends StatefulWidget {
 
 class _MusicPlayerScreenState extends State<MusicPlayerScreen>
     with WidgetsBindingObserver, RouteAware {
-
   bool isPlaying = false;
   bool visibleAfterFirstPlay = false;
 
   late List<bool> isFavoriteList;
 
-  final List<String> songs = [
+  List<String> songs = [
     "song1.wav",
     "song2.wav",
   ];
@@ -62,22 +65,41 @@ class _MusicPlayerScreenState extends State<MusicPlayerScreen>
   int currentIndex = 0;
 
   @override
-void initState() {
-  super.initState();
+  void initState() {
+    super.initState();
 
-  isFavoriteList = List.filled(songs.length, false);
-  loadFavorites();
+    isFavoriteList = List.filled(songs.length, false);
+    loadFavorites();
+    loadDeviceSongs();
 
-  AudioService.initListener((state) {
-    setState(() {
-      if (state == "PLAY") {
-        isPlaying = true;
-      } else if (state == "PAUSE") {
-        isPlaying = false;
-      }
+    AudioService.initListener((state, index) {
+      setState(() {
+        if (index != null && index >= 0 && index < songs.length) {
+          currentIndex = index;
+        }
+
+        if (state == "PLAY") {
+          isPlaying = true;
+          visibleAfterFirstPlay = true;
+        } else if (state == "PAUSE") {
+          isPlaying = false;
+        }
+      });
     });
-  });
-}
+  }
+
+  Future<void> loadDeviceSongs() async {
+    final deviceSongs = await AudioService.getSongs();
+    if (!mounted || deviceSongs.isEmpty) return;
+
+    setState(() {
+      songs = deviceSongs;
+      currentIndex = 0;
+      isFavoriteList = List.filled(songs.length, false);
+    });
+
+    await loadFavorites();
+  }
 
   Future<void> loadFavorites() async {
     List<String> saved = await DatabaseHelper.instance.getFavorites();
@@ -173,7 +195,6 @@ void initState() {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-
             Padding(
               padding: const EdgeInsets.only(top: 40),
               child: AnimatedScale(
@@ -185,23 +206,18 @@ void initState() {
                 ),
               ),
             ),
-
             Column(
               children: [
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-
                     if (visibleAfterFirstPlay)
                       IconButton(
                         iconSize: 50,
                         icon: const Icon(Icons.fast_rewind),
                         onPressed: prevSong,
                       ),
-
                     const SizedBox(width: 8),
-
                     IconButton(
                       iconSize: 75,
                       icon: Icon(
@@ -209,9 +225,7 @@ void initState() {
                       ),
                       onPressed: togglePlay,
                     ),
-
                     const SizedBox(width: 8),
-
                     if (visibleAfterFirstPlay)
                       IconButton(
                         iconSize: 50,
@@ -220,14 +234,11 @@ void initState() {
                       ),
                   ],
                 ),
-
                 const SizedBox(height: 20),
-
                 if (visibleAfterFirstPlay)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-
                       GestureDetector(
                         onLongPress: () {
                           Navigator.push(
@@ -257,7 +268,6 @@ void initState() {
                           },
                         ),
                       ),
-
                       Text(
                         songs[currentIndex],
                         style: const TextStyle(
@@ -269,7 +279,6 @@ void initState() {
                   ),
               ],
             ),
-
             const SizedBox(height: 40),
           ],
         ),
